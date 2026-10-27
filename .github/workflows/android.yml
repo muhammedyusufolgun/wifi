@@ -18,8 +18,8 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Wi-Fi.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Sinyal.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Wi-Fi-APK
-          path: app/build/outputs/apk/debug/Wi-Fi.apk
+          name: Sinyal-APK
+          path: app/build/outputs/apk/debug/Sinyal.apk
