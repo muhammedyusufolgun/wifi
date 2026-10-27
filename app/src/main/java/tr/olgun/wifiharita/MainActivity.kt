@@ -51,7 +51,7 @@ class MainActivity:Activity(){
  private fun layout(title:String){
   val frame=col().apply{setBackgroundColor(Color.rgb(248,250,252))}
   add(frame,t(title,24f,true).apply{setPadding(dp(18),dp(16),0,dp(14));setBackgroundColor(Color.WHITE)})
-  val scroll=ScrollView(this).apply{fillViewport=true}
+  val scroll=ScrollView(this).apply{isFillViewport=true}
   root=col().apply{setPadding(dp(16),dp(12),dp(16),dp(12))}
   scroll.addView(root);frame.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
   add(frame,t("Muhammed Yusuf OLGUN",11f,false,Color.LTGRAY).apply{gravity=Gravity.CENTER;setPadding(0,dp(8),0,dp(10))})
