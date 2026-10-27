@@ -86,9 +86,8 @@ class MainActivity:Activity(){
   current=panel();add(root,current)
   val heading=row()
   heading.addView(t("Diğer Wi-Fi Ağları",19f,true),LinearLayout.LayoutParams(0,-2,1f))
-  heading.addView(t("⟳  Yenile",14f,true,Color.rgb(2,132,199)).apply{setOnClickListener{scan()}})
   add(root,heading,16)
-  add(root,t("Ağa bağlanmak için ağın ayrıntısını açın.",12f,false,gray))
+  add(root,t("Listeyi aşağı çekerek yenileyin.",12f,false,gray))
   results=panel();add(root,results)
   updateCurrent();showNetworks()
  }
@@ -130,7 +129,7 @@ class MainActivity:Activity(){
    add(results,t("Diğer ağlar için uygulamayı kullanırken konum izni verin.",13f,false,gray));return}
   if(!locationEnabled()){add(results,t("Diğer ağları taramak için Konum hizmetini açın.",13f,false,gray));return}
   @Suppress("DEPRECATION") val items=try{wifi.scanResults.sortedByDescending{it.level}}catch(e:SecurityException){emptyList()}
-  if(items.isEmpty()){add(results,t("Ağ bulunamadı. Yenile'ye dokunun.",13f,false,gray));return}
+  if(items.isEmpty()){add(results,t("Ağ bulunamadı. Listeyi aşağı çekerek yenileyin.",13f,false,gray));return}
   for(ap in items){
    val r=row().apply{setPadding(0,dp(8),0,dp(8))}
    r.addView(t("◉",22f,true,green))
