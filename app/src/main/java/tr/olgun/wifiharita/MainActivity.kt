@@ -1,78 +1,171 @@
 package tr.olgun.wifiharita
-
+import android.Manifest
 import android.app.Activity
 import android.os.Bundle
-import android.content.Context
-import android.graphics.Color
-import android.graphics.Typeface
+import android.content.*
+import android.content.pm.PackageManager
+import android.graphics.*
 import android.graphics.drawable.GradientDrawable
-import android.net.wifi.WifiManager
-import android.os.Handler
-import android.os.Looper
+import android.location.LocationManager
+import android.net.wifi.*
+import android.os.*
+import android.provider.Settings
+import android.view.*
 import android.widget.*
-import android.view.Gravity
 
 class MainActivity:Activity(){
+ private val green=Color.rgb(0,112,47)
+ private val gray=Color.rgb(105,117,130)
  private lateinit var wifi:WifiManager
- private lateinit var connected:LinearLayout
- private lateinit var others:LinearLayout
+ private lateinit var root:LinearLayout
+ private lateinit var current:LinearLayout
+ private lateinit var results:LinearLayout
+ private var detail=false
  private val handler=Handler(Looper.getMainLooper())
- private val green=Color.rgb(0,110,47)
- private fun text(s:String,sp:Float=15f,bold:Boolean=false):TextView=TextView(this).apply{
-  text=s;textSize=sp;setTextColor(Color.rgb(28,42,55))
-  if(bold)setTypeface(null,Typeface.BOLD)
-  setPadding(8,7,8,7)
+ private val scanReceiver=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){if(!detail)showNetworks()}}
+ private fun dp(x:Int)=(x*resources.displayMetrics.density).toInt()
+ private fun t(s:String,size:Float=15f,bold:Boolean=false,color:Int=Color.rgb(25,39,54))=TextView(this).apply{
+  text=s;textSize=size;setTextColor(color);setPadding(dp(4),dp(6),dp(4),dp(6))
+  if(bold)setTypeface(null,android.graphics.Typeface.BOLD)
  }
- private fun quality(v:Int)=when {
-  v>=-49->"Mükemmel";v>=-59->"Çok iyi";v>=-67->"İyi";v>=-74->"Orta"
-  v>=-79->"Zayıf";v>=-89->"Çok zayıf";else->"Kritik"
+ private fun col()=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+ private fun row()=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+ private fun add(p:LinearLayout,v:View,margin:Int=0){p.addView(v,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(margin)})}
+ private fun panel()=col().apply{
+  setPadding(dp(14),dp(12),dp(14),dp(12))
+  background=GradientDrawable().apply{setColor(Color.WHITE);cornerRadius=dp(13).toFloat();setStroke(dp(1),Color.rgb(223,231,238))}
  }
- private fun color(v:Int)=when{
-  v>=-59->green;v>=-67->Color.rgb(101,163,13);v>=-74->Color.rgb(202,138,4)
-  v>=-79->Color.rgb(234,88,12);else->Color.rgb(220,38,38)
+ private fun quality(n:Int)=when{n>=-49->"Mükemmel";n>=-59->"Çok iyi";n>=-67->"İyi";n>=-74->"Orta";n>=-79->"Zayıf";n>=-89->"Çok zayıf";else->"Kritik"}
+ private fun color(n:Int)=when{n>=-59->green;n>=-67->Color.rgb(101,163,13);n>=-74->Color.rgb(224,158,0);n>=-79->Color.rgb(234,100,50);else->Color.RED}
+ private fun band(n:Int)=when{n>=5925->"6 GHz";n>=4900->"5 GHz";else->"2.4 GHz"}
+ private fun channel(n:Int)=when{n==2484->14;n in 2412..2472->(n-2407)/5;n>=5955->(n-5950)/5;n>=5000->(n-5000)/5;else->0}
+ private fun bars(n:Int)=object:View(this){
+  val paint=Paint(3)
+  override fun onMeasure(w:Int,h:Int){setMeasuredDimension(dp(82),dp(55))}
+  override fun onDraw(c:Canvas){
+   val level=((n+95)*5/65).coerceIn(1,5)
+   for(i in 0..4){val h=dp(10+i*10);paint.color=if(i<level)color(n) else Color.rgb(218,223,230)
+    c.drawRoundRect(dp(i*16+2).toFloat(),(height-h).toFloat(),dp(i*16+12).toFloat(),height.toFloat(),dp(3).toFloat(),dp(3).toFloat(),paint)}
+  }
  }
- private fun card():LinearLayout=LinearLayout(this).apply{
-  orientation=LinearLayout.VERTICAL;setPadding(14,12,14,12)
-  background=GradientDrawable().apply{setColor(Color.WHITE);cornerRadius=20f;setStroke(1,Color.rgb(222,230,238))}
+ private fun layout(title:String){
+  val frame=col().apply{setBackgroundColor(Color.rgb(248,250,252))}
+  add(frame,t(title,24f,true).apply{setPadding(dp(18),dp(16),0,dp(14));setBackgroundColor(Color.WHITE)})
+  val scroll=ScrollView(this).apply{fillViewport=true}
+  root=col().apply{setPadding(dp(16),dp(12),dp(16),dp(12))}
+  scroll.addView(root);frame.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+  add(frame,t("Muhammed Yusuf OLGUN",11f,false,Color.LTGRAY).apply{gravity=Gravity.CENTER;setPadding(0,dp(8),0,dp(10))})
+  setContentView(frame)
  }
- private fun band(freq:Int)=when{freq>=5925->"6 GHz";freq>=4900->"5 GHz";freq>=2400->"2.4 GHz";else->"$freq MHz"}
- override fun onCreate(savedInstanceState:Bundle?){
-  super.onCreate(savedInstanceState)
+ override fun onCreate(state:Bundle?){
+  super.onCreate(state)
+  window.statusBarColor=Color.WHITE;window.navigationBarColor=Color.WHITE
+  window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
   wifi=applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-  val scroll=ScrollView(this).apply{setBackgroundColor(Color.rgb(248,250,252))}
-  val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(16,22,16,24)}
-  scroll.addView(root);setContentView(scroll)
-  root.addView(text("WiFi Sinyal Haritası",24f,true))
-  root.addView(text("Yerel Wi-Fi sinyal ölçümü · Veri gönderilmez",12f))
-  root.addView(text("BAĞLI OLUNAN AĞ",13f,true))
-  connected=card();root.addView(connected)
-  root.addView(text("Diğer Wi-Fi Ağları",21f,true))
-  val refresh=Button(this).apply{text="Yenile";setOnClickListener{update()}}
-  root.addView(refresh)
-  others=card();root.addView(others)
-  root.addView(text("Gizlilik: Konum izni istenmez. Android, yakındaki Wi-Fi ağ adlarını taramak için konum izni gerektirdiğinden diğer ağlar bu izin olmadan listelenemez.",12f))
-  update()
-  handler.post(object:Runnable{override fun run(){updateConnected();handler.postDelayed(this,3000)}})
+  registerReceiver(scanReceiver,IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION))
+  home()
+  if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)
+   requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),12)
+  else scan()
+  handler.post(object:Runnable{override fun run(){if(!detail)updateCurrent();handler.postDelayed(this,3000)}})
  }
- private fun updateConnected(){
-  connected.removeAllViews()
-  if(!wifi.isWifiEnabled){connected.addView(text("Wi-Fi kapalı",19f,true));return}
+ private fun home(){
+  detail=false;layout("Wi-Fi Sinyal Haritası")
+  current=panel();add(root,current)
+  val heading=row()
+  heading.addView(t("Diğer Wi-Fi Ağları",19f,true),LinearLayout.LayoutParams(0,-2,1f))
+  heading.addView(t("⟳  Yenile",14f,true,Color.rgb(2,132,199)).apply{setOnClickListener{scan()}})
+  add(root,heading,16)
+  results=panel();add(root,results)
+  updateCurrent();showNetworks()
+ }
+ private fun updateCurrent(){
+  current.removeAllViews();add(current,t("Bağlı Olunan Ağ",16f,true))
+  if(!wifi.isWifiEnabled){add(current,t("Wi-Fi kapalı"));return}
   @Suppress("DEPRECATION") val info=wifi.connectionInfo
-  val rssi=info.rssi
-  if(rssi<=-127){connected.addView(text("Wi-Fi bağlantısı bulunamadı",18f,true));return}
-  val name=info.ssid.trim('"').let{if(it=="<unknown ssid>"||it.isBlank())"Bağlı Wi-Fi ağı" else it}
-  connected.addView(text("◉  "+name,20f,true).apply{setTextColor(green)})
-  connected.addView(text("$rssi dBm",35f,true).apply{setTextColor(color(rssi))})
-  connected.addView(text(quality(rssi),19f,true).apply{setTextColor(color(rssi))})
-  val strength=((rssi+95)*5/65).coerceIn(1,5)
-  connected.addView(text((1..5).joinToString("  "){if(it<=strength)"▮" else "▯"},27f,true).apply{setTextColor(color(rssi))})
-  connected.addView(text(band(info.frequency)+"  ·  "+info.frequency+" MHz  ·  "+info.linkSpeed+" Mbps",13f))
-  connected.addView(text("Bağlantı durumu: Bağlı",13f,true))
+  val n=info.rssi
+  if(n<=-127){add(current,t("Bağlı ağ bulunamadı"));return}
+  val name=info.ssid.trim('"').let{if(it=="<unknown ssid>"||it.isBlank())"Bağlı Wi-Fi" else it}
+  val head=row()
+  head.addView(t("◉  "+name,19f,true,green),LinearLayout.LayoutParams(0,-2,1f))
+  head.addView(t("Bağlı",13f,true,green))
+  add(current,head,10)
+  val r=row();val left=col()
+  add(left,t(n.toString()+" dBm",35f,true,color(n)))
+  add(left,t(quality(n),20f,true,color(n)))
+  r.addView(left,LinearLayout.LayoutParams(0,-2,1f));r.addView(bars(n))
+  add(current,r,12)
+  add(current,t(band(info.frequency)+" · Kanal "+channel(info.frequency)+" · "+info.linkSpeed+" Mbps",13f,false,gray),8)
+  add(current,t("Sinyal seviyesi: "+quality(n),13f,false,green),7)
  }
- private fun update(){
-  updateConnected()
-  others.removeAllViews()
-  others.addView(text("Yakındaki ağlar listelenemiyor",17f,true))
-  others.addView(text("Konum izni istememe tercihiniz korunuyor. Android, diğer ağların SSID ve dBm tarama sonuçlarına bu izin olmadan erişimi kısıtlar.",13f))
+ private fun locationEnabled():Boolean{
+  val lm=getSystemService(Context.LOCATION_SERVICE) as LocationManager
+  return lm.isProviderEnabled(LocationManager.GPS_PROVIDER)||lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
  }
+ private fun scan(){
+  if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
+   requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),12);return
+  }
+  if(!locationEnabled()){Toast.makeText(this,"Konum hizmetini açın.",Toast.LENGTH_LONG).show()
+   startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));return}
+  @Suppress("DEPRECATION") wifi.startScan()
+  showNetworks()
+ }
+ private fun showNetworks(){
+  results.removeAllViews()
+  if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
+   add(results,t("Diğer ağlar için uygulamayı kullanırken konum izni verin.",13f,false,gray));return}
+  if(!locationEnabled()){add(results,t("Diğer ağları taramak için Konum hizmetini açın.",13f,false,gray));return}
+  @Suppress("DEPRECATION") val items=try{wifi.scanResults.sortedByDescending{it.level}}catch(e:SecurityException){emptyList()}
+  if(items.isEmpty()){add(results,t("Ağ bulunamadı. Yenile'ye dokunun.",13f,false,gray));return}
+  for(ap in items){
+   val r=row().apply{setPadding(0,dp(8),0,dp(8))}
+   r.addView(t("◉",22f,true,green))
+   val left=col()
+   add(left,t(ap.SSID.ifBlank{"Gizli ağ"},14f,true))
+   add(left,t(band(ap.frequency)+" · Kanal "+channel(ap.frequency),11f,false,gray))
+   r.addView(left,LinearLayout.LayoutParams(0,-2,1f))
+   val right=col()
+   add(right,t(ap.level.toString()+" dBm",14f,true))
+   add(right,t(quality(ap.level),12f,true,color(ap.level)))
+   r.addView(right)
+   r.addView(bars(ap.level),LinearLayout.LayoutParams(dp(82),dp(55)))
+   r.addView(t("›",23f,false,gray))
+   r.setOnClickListener{showDetail(ap)}
+   add(results,r)
+   add(results,View(this).apply{setBackgroundColor(Color.rgb(235,239,244));layoutParams=LinearLayout.LayoutParams(-1,dp(1))})
+  }
+ }
+ private fun line(p:LinearLayout,key:String,value:String){
+  val r=row().apply{setPadding(0,dp(7),0,dp(7))}
+  r.addView(t(key,14f,false,gray),LinearLayout.LayoutParams(0,-2,1f))
+  r.addView(t(value,14f,true));add(p,r)
+ }
+ private fun showDetail(ap:ScanResult){
+  detail=true;layout("Ağ Detayı")
+  add(root,t("← Geri",15f,true,green).apply{setOnClickListener{home()} })
+  val c=panel()
+  add(c,t("◉  "+ap.SSID.ifBlank{"Gizli ağ"},23f,true,green))
+  add(c,t(ap.level.toString()+" dBm",35f,true,color(ap.level)),12)
+  add(c,t(quality(ap.level),19f,true,color(ap.level)))
+  add(c,bars(ap.level))
+  add(root,c,12)
+  val info=panel()
+  add(info,t("Ağ Bilgileri",18f,true))
+  line(info,"SSID",ap.SSID.ifBlank{"Gizli ağ"})
+  line(info,"BSSID",ap.BSSID)
+  line(info,"Frekans",ap.frequency.toString()+" MHz ("+band(ap.frequency)+")")
+  line(info,"Kanal",channel(ap.frequency).toString())
+  line(info,"Sinyal Gücü",ap.level.toString()+" dBm")
+  line(info,"Sinyal Seviyesi",quality(ap.level))
+  line(info,"Güvenlik",when{ap.capabilities.contains("SAE")->"WPA3";ap.capabilities.contains("WPA2")->"WPA2";ap.capabilities.contains("WPA")->"WPA";ap.capabilities.contains("WEP")->"WEP";else->"Açık / bilinmiyor"})
+  add(root,info,14)
+ }
+ override fun onBackPressed(){if(detail)home()else super.onBackPressed()}
+ override fun onRequestPermissionsResult(code:Int,p:Array<out String>,g:IntArray){
+  super.onRequestPermissionsResult(code,p,g)
+  if(code==12&&g.firstOrNull()==PackageManager.PERMISSION_GRANTED)scan()
+  else if(!detail)showNetworks()
+ }
+ override fun onDestroy(){handler.removeCallbacksAndMessages(null);unregisterReceiver(scanReceiver);super.onDestroy()}
 }
