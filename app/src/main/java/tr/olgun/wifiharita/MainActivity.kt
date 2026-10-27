@@ -21,6 +21,8 @@ class MainActivity:Activity(){
  private lateinit var current:LinearLayout
  private lateinit var results:LinearLayout
  private var detail=false
+ private var pullStart=0f
+ private var pullReady=false
  private val handler=Handler(Looper.getMainLooper())
  private val scanReceiver=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){if(!detail)showNetworks()}}
  private fun dp(x:Int)=(x*resources.displayMetrics.density).toInt()
@@ -51,10 +53,20 @@ class MainActivity:Activity(){
  private fun layout(title:String){
   val frame=col().apply{setBackgroundColor(Color.rgb(248,250,252))}
   add(frame,t(title,24f,true).apply{setPadding(dp(18),dp(16),0,dp(14));setBackgroundColor(Color.WHITE)})
-  val scroll=ScrollView(this).apply{isFillViewport=true}
+  val scroll=ScrollView(this).apply{
+   isFillViewport=true
+   setOnTouchListener { v,event ->
+    when(event.actionMasked){
+     MotionEvent.ACTION_DOWN -> {pullStart=event.y;pullReady=false}
+     MotionEvent.ACTION_MOVE -> {if(!detail && scrollY==0 && event.y-pullStart>dp(85))pullReady=true}
+     MotionEvent.ACTION_UP -> {if(pullReady && !detail){pullReady=false;scan();Toast.makeText(this@MainActivity,"Wi-Fi ağları yenileniyor",Toast.LENGTH_SHORT).show()}}
+    }
+    false
+   }
+  }
   root=col().apply{setPadding(dp(16),dp(12),dp(16),dp(12))}
   scroll.addView(root);frame.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
-  add(frame,t("Muhammed Yusuf OLGUN",11f,false,Color.LTGRAY).apply{gravity=Gravity.CENTER;setPadding(0,dp(8),0,dp(10))})
+  add(frame,t("Muhammed Yusuf OLGUN",11f,false,Color.rgb(92,99,108)).apply{gravity=Gravity.CENTER;setPadding(0,dp(8),0,dp(10))})
   setContentView(frame)
  }
  override fun onCreate(state:Bundle?){
@@ -76,6 +88,7 @@ class MainActivity:Activity(){
   heading.addView(t("Diğer Wi-Fi Ağları",19f,true),LinearLayout.LayoutParams(0,-2,1f))
   heading.addView(t("⟳  Yenile",14f,true,Color.rgb(2,132,199)).apply{setOnClickListener{scan()}})
   add(root,heading,16)
+  add(root,t("Ağa bağlanmak için ağın ayrıntısını açın.",12f,false,gray))
   results=panel();add(root,results)
   updateCurrent();showNetworks()
  }
@@ -141,6 +154,11 @@ class MainActivity:Activity(){
   r.addView(t(key,14f,false,gray),LinearLayout.LayoutParams(0,-2,1f))
   r.addView(t(value,14f,true));add(p,r)
  }
+ private fun openWifiSettings(){
+  // Android does not permit ordinary apps to silently join arbitrary Wi-Fi networks.
+  // System Wi-Fi settings lets the user choose and authorize the connection.
+  startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+ }
  private fun showDetail(ap:ScanResult){
   detail=true;layout("Ağ Detayı")
   add(root,t("← Geri",15f,true,green).apply{setOnClickListener{home()} })
@@ -160,6 +178,7 @@ class MainActivity:Activity(){
   line(info,"Sinyal Seviyesi",quality(ap.level))
   line(info,"Güvenlik",when{ap.capabilities.contains("SAE")->"WPA3";ap.capabilities.contains("WPA2")->"WPA2";ap.capabilities.contains("WPA")->"WPA";ap.capabilities.contains("WEP")->"WEP";else->"Açık / bilinmiyor"})
   add(root,info,14)
+  add(root,Button(this).apply{text="Bu Ağa Bağlan";setOnClickListener{openWifiSettings()}},14)
  }
  override fun onBackPressed(){if(detail)home()else super.onBackPressed()}
  override fun onRequestPermissionsResult(code:Int,p:Array<out String>,g:IntArray){
